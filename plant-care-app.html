@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plant Care</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f3ee; --card: #ffffff; --ink: #2b2b28; --muted: #6b6b63;
+    --accent: #3f6b4a; --accent-light: #e7efe9; --warn: #b5651d; --danger: #a4373a;
+    --border: #e3e0d8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); padding-bottom: 80px;
+  }
+  header {
+    padding: 20px 16px 12px; background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--card);
+    border-top: 1px solid var(--border); z-index: 10;
+  }
+  nav button {
+    flex: 1; padding: 14px 0; border: none; background: none; font-size: 14px; color: var(--muted);
+    cursor: pointer;
+  }
+  nav button.active { color: var(--accent); font-weight: 600; }
+  main { padding: 16px; max-width: 640px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { margin: 0 0 10px; font-size: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select, textarea {
+    width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 15px; background: #fff;
+  }
+  button.primary {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 12px 16px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 12px;
+  }
+  button.secondary {
+    background: var(--accent-light); color: var(--accent); border: none; border-radius: 8px;
+    padding: 12px 16px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px;
+  }
+  button:disabled { opacity: 0.5; }
+  .status-line { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+  .reading-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .reading-box { border-radius: 8px; padding: 10px; text-align: center; }
+  .reading-box.ok { background: #e2f0e6; }
+  .reading-box.warn { background: #fbeadb; }
+  .reading-box.danger { background: #f6dede; }
+  .reading-box .val { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .reading-box.warn .val { color: var(--warn); }
+  .reading-box.danger .val { color: var(--danger); }
+  .reading-box .range { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .reading-box .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .plant-row {
+    display: flex; justify-content: space-between; align-items: center; padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .plant-row:last-child { border-bottom: none; }
+  .plant-row-clickable { cursor: pointer; }
+  .plant-row-clickable:hover, .plant-row-clickable:active { background: var(--accent-light); margin: 0 -16px; padding-left: 16px; padding-right: 16px; border-radius: 6px; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
+  .badge.ok { background: #e2f0e6; color: var(--accent); }
+  .badge.warn { background: #fbeadb; color: var(--warn); }
+  .badge.danger { background: #f6dede; color: var(--danger); }
+  .badge.none { background: #eee; color: var(--muted); }
+  .search-result {
+    padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-top: 6px; cursor: pointer;
+  }
+  .search-result:hover { background: var(--accent-light); }
+  .small { font-size: 12px; color: var(--muted); }
+  canvas { max-height: 220px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌿 Plant Care</h1>
+  <p id="header-sub">Setup, log, and track your plants</p>
+</header>
+
+<main>
+
+  <!-- SETUP VIEW -->
+  <div class="view" id="view-setup">
+    <div class="card">
+      <h2>Config</h2>
+      <label>Apps Script Web App URL</label>
+      <input id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec">
+      <label>Shared secret (must match Apps Script)</label>
+      <input id="cfg-secret" placeholder="change-me-to-something-random">
+      <button class="secondary" onclick="saveConfig()">Save config</button>
+      <div class="status-line" id="cfg-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Add a plant</h2>
+      <label>Plant name (yours, e.g. "Monstera - living room")</label>
+      <input id="new-plant-name" placeholder="Monstera - living room" oninput="document.getElementById('add-plant-status').textContent = ''">
+      <label>Search species (OpenPlantbook)</label>
+      <input id="species-search" placeholder="e.g. Monstera deliciosa" oninput="debouncedSearch(); document.getElementById('add-plant-status').textContent = '';">
+      <div id="species-results"></div>
+      <div id="selected-species" class="small" style="margin-top:8px;"></div>
+      <button class="primary" onclick="savePlant()" id="save-plant-btn" disabled>Save plant</button>
+      <div class="status-line" id="add-plant-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Your plants</h2>
+      <div id="setup-plant-list" class="small">Loading…</div>
+      <button class="secondary" onclick="loadPlants()">Refresh list</button>
+    </div>
+
+    <div class="card">
+      <h2>Write NFC tag</h2>
+      <p class="small">Select a plant, tap "Write tag", then hold your phone against the NFC sticker.</p>
+      <select id="nfc-write-plant" onchange="document.getElementById('nfc-write-status').textContent = ''"></select>
+      <button class="primary" onclick="writeNfcTag()">Write tag</button>
+      <div class="status-line" id="nfc-write-status"></div>
+    </div>
+  </div>
+
+  <!-- LOG VIEW -->
+  <div class="view active" id="view-log">
+    <div class="card">
+      <h2>1. Identify the plant</h2>
+      <button class="primary" onclick="scanNfc()" id="nfc-scan-btn">📲 Tap NFC tag</button>
+      <label>...or select manually</label>
+      <select id="manual-plant-select" onchange="selectPlantManually()"></select>
+      <div class="status-line" id="identify-status"></div>
+    </div>
+
+    <div class="card" id="current-plant-card" style="display:none;">
+      <h2 id="current-plant-name">—</h2>
+      <button class="primary" onclick="connectAndRead()" id="read-btn">🔵 Connect &amp; read sensor</button>
+      <div class="status-line" id="ble-status"></div>
+      <div class="reading-grid" id="reading-grid" style="display:none;">
+        <div class="reading-box"><div class="val" id="r-moisture">–</div><div class="lbl">Moisture %</div></div>
+        <div class="reading-box"><div class="val" id="r-light">–</div><div class="lbl">Light lux</div></div>
+        <div class="reading-box"><div class="val" id="r-temp">–</div><div class="lbl">Temp °C</div></div>
+        <div class="reading-box"><div class="val" id="r-cond">–</div><div class="lbl">Conductivity µS/cm</div></div>
+      </div>
+      <button class="secondary" onclick="saveReading()" id="save-reading-btn" style="display:none;">Save reading to sheet</button>
+      <div class="status-line" id="save-status"></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div class="view" id="view-dashboard">
+    <div class="card">
+      <h2>Plant status</h2>
+      <div id="dash-status-list" class="small">Loading…</div>
+      <button class="secondary" onclick="loadDashboard()">Refresh</button>
+    </div>
+    <div class="card">
+      <h2>Latest reading vs recommended</h2>
+      <select id="dash-plant-select" onchange="onDashPlantChange()"></select>
+      <div id="latest-compare" style="margin-top:12px;"></div>
+    </div>
+    <div class="card">
+      <h2>Trend</h2>
+      <select id="dash-metric-select" onchange="renderChart()">
+        <option value="Moisture">Moisture</option>
+        <option value="Light">Light</option>
+        <option value="Temperature">Temperature</option>
+        <option value="Conductivity">Conductivity</option>
+      </select>
+      <canvas id="trend-chart"></canvas>
+    </div>
+  </div>
+
+</main>
+
+<nav>
+  <button class="active" onclick="switchView('log')" id="nav-log">Log</button>
+  <button onclick="switchView('dashboard')" id="nav-dashboard">Dashboard</button>
+  <button onclick="switchView('setup')" id="nav-setup">Setup</button>
+</nav>
+
+<script>
+// ===== CONFIG PERSISTENCE (local to this device only) =====
+let CONFIG = JSON.parse(localStorage.getItem('plantAppConfig') || '{}');
+document.getElementById('cfg-url').value = CONFIG.url || '';
+document.getElementById('cfg-secret').value = CONFIG.secret || '';
+
+function saveConfig() {
+  CONFIG.url = document.getElementById('cfg-url').value.trim();
+  CONFIG.secret = document.getElementById('cfg-secret').value.trim();
+  localStorage.setItem('plantAppConfig', JSON.stringify(CONFIG));
+  document.getElementById('cfg-status').textContent = 'Saved.';
+  loadPlants();
+}
+
+async function apiPost(body) {
+  if (!CONFIG.url) throw new Error('Set the Apps Script URL in Setup first.');
+  body.secret = CONFIG.secret;
+  const resp = await fetch(CONFIG.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight with Apps Script
+    body: JSON.stringify(body)
+  });
+  return resp.json();
+}
+
+async function apiGet(action) {
+  if (!CONFIG.url) throw new Error('Set the Apps Script URL in Setup first.');
+  const resp = await fetch(CONFIG.url + '?action=' + action);
+  return resp.json();
+}
+
+// ===== VIEW SWITCHING =====
+function switchView(name) {
+  ['setup','log','dashboard'].forEach(v => {
+    document.getElementById('view-' + v).classList.toggle('active', v === name);
+    document.getElementById('nav-' + v).classList.toggle('active', v === name);
+  });
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'setup') loadPlants();
+}
+
+// ===== PLANT LIST STATE =====
+let PLANTS = [];
+
+async function loadPlants() {
+  if (!CONFIG.url) { document.getElementById('setup-plant-list').textContent = 'Set config first.'; return; }
+  try {
+    const data = await apiGet('getPlants');
+    PLANTS = data.plants || [];
+    renderPlantLists();
+  } catch (err) {
+    document.getElementById('setup-plant-list').textContent = 'Error: ' + err.message;
+  }
+}
+
+function renderPlantLists() {
+  const setupList = document.getElementById('setup-plant-list');
+  setupList.innerHTML = PLANTS.length ? '' : 'No plants yet.';
+  PLANTS.forEach(p => {
+    const hasTag = p['NFC Tag'] === 'Y';
+    const row = document.createElement('div');
+    row.className = 'plant-row';
+    row.innerHTML = `<span>${p.PlantName}<span class="small"> — ${p.Species || 'no species set'}</span></span>
+                      <span class="badge ${hasTag ? 'ok' : 'warn'}">${hasTag ? 'Tag ✓' : 'No tag yet'}</span>`;
+    setupList.appendChild(row);
+  });
+
+  const fillSelect = (sel, includeBlank) => {
+    sel.innerHTML = (includeBlank ? '<option value="">Select a plant…</option>' : '') +
+      PLANTS.map(p => `<option value="${p.PlantID}">${p.PlantName}${p['NFC Tag'] === 'Y' ? '' : ' (no tag yet)'}</option>`).join('');
+  };
+  fillSelect(document.getElementById('nfc-write-plant'), false);
+  fillSelect(document.getElementById('manual-plant-select'), true);
+  fillSelect(document.getElementById('dash-plant-select'), false);
+}
+
+// ===== SETUP: SPECIES SEARCH =====
+let selectedSpecies = null;
+let searchTimer = null;
+function debouncedSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(searchSpecies, 400);
+}
+
+async function searchSpecies() {
+  const q = document.getElementById('species-search').value.trim();
+  const resultsEl = document.getElementById('species-results');
+  if (q.length < 2) { resultsEl.innerHTML = ''; return; }
+  resultsEl.innerHTML = '<div class="small">Searching…</div>';
+  try {
+    const data = await apiPost({ action: 'searchSpecies', query: q });
+    if (data.status !== 'ok') { resultsEl.innerHTML = '<div class="small">' + data.message + '</div>'; return; }
+    const results = (data.results && data.results.results) || [];
+    resultsEl.innerHTML = results.slice(0, 6).map(r =>
+      `<div class="search-result" onclick='pickSpecies(${JSON.stringify(r).replace(/'/g, "&apos;")})'>${r.display_pid || r.pid}</div>`
+    ).join('') || '<div class="small">No matches.</div>';
+  } catch (err) {
+    resultsEl.innerHTML = '<div class="small">Error: ' + err.message + '</div>';
+  }
+}
+
+async function pickSpecies(r) {
+  document.getElementById('species-results').innerHTML = '';
+  document.getElementById('species-search').value = r.display_pid || r.pid;
+  document.getElementById('selected-species').textContent = 'Loading thresholds…';
+  try {
+    const data = await apiPost({ action: 'getSpeciesDetail', pid: r.pid });
+    if (data.status !== 'ok') throw new Error(data.message);
+    const d = data.detail;
+    selectedSpecies = {
+      pid: r.pid,
+      thresholds: {
+        moistureMin: d.min_soil_moist, moistureMax: d.max_soil_moist,
+        lightMin: d.min_light_lux, lightMax: d.max_light_lux,
+        tempMin: d.min_temp, tempMax: d.max_temp,
+        conductivityMin: d.min_soil_ec, conductivityMax: d.max_soil_ec
+      }
+    };
+    document.getElementById('selected-species').innerHTML =
+      `Moisture ${d.min_soil_moist}-${d.max_soil_moist}% · Light ${d.min_light_lux}-${d.max_light_lux} lux · ` +
+      `Temp ${d.min_temp}-${d.max_temp}°C · Conductivity ${d.min_soil_ec}-${d.max_soil_ec} µS/cm`;
+    document.getElementById('save-plant-btn').disabled = false;
+  } catch (err) {
+    document.getElementById('selected-species').textContent = 'Error fetching thresholds: ' + err.message;
+  }
+}
+
+async function savePlant() {
+  const name = document.getElementById('new-plant-name').value.trim();
+  const statusEl = document.getElementById('add-plant-status');
+  if (!name) { statusEl.textContent = 'Enter a plant name.'; return; }
+  if (!selectedSpecies) { statusEl.textContent = 'Pick a species from the search results first.'; return; }
+  const plantId = 'plant-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
+  statusEl.textContent = 'Saving…';
+  try {
+    const data = await apiPost({
+      action: 'savePlant', plantId, plantName: name, species: selectedSpecies.pid,
+      thresholds: selectedSpecies.thresholds
+    });
+    if (data.status !== 'ok') throw new Error(data.message);
+    statusEl.textContent = 'Saved ✓';
+    document.getElementById('new-plant-name').value = '';
+    document.getElementById('species-search').value = '';
+    document.getElementById('selected-species').textContent = '';
+    selectedSpecies = null;
+    document.getElementById('save-plant-btn').disabled = true;
+    loadPlants();
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+// ===== NFC WRITE (Setup) =====
+async function writeNfcTag() {
+  const statusEl = document.getElementById('nfc-write-status');
+  const plantId = document.getElementById('nfc-write-plant').value;
+  if (!plantId) { statusEl.textContent = 'Pick a plant first.'; return; }
+  if (!('NDEFReader' in window)) { statusEl.textContent = 'Web NFC not supported in this browser.'; return; }
+  try {
+    const writer = new NDEFReader();
+    statusEl.textContent = 'Hold phone against the tag…';
+    await writer.write({ records: [{ recordType: 'text', data: plantId }] });
+    statusEl.textContent = 'Tag written — recording it in the sheet…';
+    const result = await apiPost({ action: 'markTagWritten', plantId });
+    if (result.status !== 'ok') {
+      statusEl.textContent = 'Tag written to NFC, but sheet update failed: ' + result.message;
+      return;
+    }
+    statusEl.textContent = 'Tag written ✓';
+    loadPlants();
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+// ===== LOG VIEW: IDENTIFY PLANT =====
+let currentPlant = null;
+
+function setCurrentPlant(plantId) {
+  const p = PLANTS.find(pl => pl.PlantID === plantId);
+  if (!p) { document.getElementById('identify-status').textContent = 'Unknown plant ID: ' + plantId; return; }
+  currentPlant = p;
+  document.getElementById('manual-plant-select').value = plantId;
+  document.getElementById('current-plant-card').style.display = 'block';
+  document.getElementById('current-plant-name').textContent = p.PlantName;
+  document.getElementById('reading-grid').style.display = 'none';
+  document.getElementById('save-reading-btn').style.display = 'none';
+  document.getElementById('identify-status').textContent = 'Selected: ' + p.PlantName;
+}
+
+function selectPlantManually() {
+  const id = document.getElementById('manual-plant-select').value;
+  if (id) setCurrentPlant(id);
+}
+
+let nfcArmed = false;
+
+async function scanNfc() {
+  const statusEl = document.getElementById('identify-status');
+  if (!('NDEFReader' in window)) { statusEl.textContent = 'Web NFC not supported — use the dropdown instead.'; return; }
+
+  if (nfcArmed) {
+    statusEl.textContent = 'Already listening — just tap any tag, no need to press this again.';
+    return;
+  }
+
+  try {
+    const reader = new NDEFReader();
+    await reader.scan();
+    nfcArmed = true;
+    document.getElementById('nfc-scan-btn').textContent = '📲 Listening for taps…';
+    statusEl.textContent = 'Armed — tap any plant tag now or anytime this tab stays open.';
+    reader.onreading = event => {
+      const record = event.message.records[0];
+      const textDecoder = new TextDecoder(record.encoding || 'utf-8');
+      const plantId = textDecoder.decode(record.data);
+      switchView('log');
+      setCurrentPlant(plantId);
+    };
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+// ===== BLUETOOTH READ (Mi Flora / Flower Care protocol) =====
+const SERVICE_UUID = '00001204-0000-1000-8000-00805f9b34fb';
+const MODE_CHAR_UUID = '00001a00-0000-1000-8000-00805f9b34fb';
+const DATA_CHAR_UUID = '00001a01-0000-1000-8000-00805f9b34fb';
+let lastReading = null;
+
+async function connectAndRead() {
+  const statusEl = document.getElementById('ble-status');
+  if (!navigator.bluetooth) { statusEl.textContent = 'Web Bluetooth not supported in this browser.'; return; }
+  try {
+    statusEl.textContent = 'Choose your sensor in the picker…';
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'Flower' }],
+      optionalServices: [SERVICE_UUID]
+    });
+    statusEl.textContent = 'Connecting…';
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const modeChar = await service.getCharacteristic(MODE_CHAR_UUID);
+    await modeChar.writeValue(Uint8Array.of(0xA0, 0x1F));
+
+    // small delay so the sensor has real-time mode active before reading
+    await new Promise(r => setTimeout(r, 500));
+
+    const dataChar = await service.getCharacteristic(DATA_CHAR_UUID);
+    const value = await dataChar.readValue();
+
+    const temperature = value.getInt16(0, true) / 10;
+    const light = value.getUint16(3, true);
+    const moisture = value.getUint8(7);
+    const conductivity = value.getUint16(8, true);
+
+    lastReading = { temperature, light, moisture, conductivity };
+
+    document.getElementById('r-moisture').textContent = moisture;
+    document.getElementById('r-light').textContent = light;
+    document.getElementById('r-temp').textContent = temperature.toFixed(1);
+    document.getElementById('r-cond').textContent = conductivity;
+    document.getElementById('reading-grid').style.display = 'grid';
+    document.getElementById('save-reading-btn').style.display = 'block';
+    statusEl.textContent = 'Read ✓ — check values, then save.';
+
+    device.gatt.disconnect();
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function saveReading() {
+  const statusEl = document.getElementById('save-status');
+  if (!currentPlant || !lastReading) return;
+  statusEl.textContent = 'Saving…';
+  try {
+    const data = await apiPost({
+      action: 'logReading',
+      plantId: currentPlant.PlantID,
+      plantName: currentPlant.PlantName,
+      timestamp: new Date().toISOString(),
+      moisture: lastReading.moisture,
+      light: lastReading.light,
+      temperature: lastReading.temperature,
+      conductivity: lastReading.conductivity
+    });
+    if (data.status !== 'ok') throw new Error(data.message);
+    statusEl.textContent = 'Saved to sheet ✓';
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+// ===== DASHBOARD: LATEST VS RECOMMENDED =====
+function onDashPlantChange() {
+  renderLatestComparison();
+  renderChart();
+}
+
+// Light readings are only meaningful if taken during typical daylight hours —
+// otherwise every evening reading would falsely flag "needs more light."
+// Adjust these if your daily routine differs.
+const DAYLIGHT_START_HOUR = 8;
+const DAYLIGHT_END_HOUR = 18;
+
+function isDuringDaylightWindow(timestamp) {
+  const hour = new Date(timestamp).getHours();
+  return hour >= DAYLIGHT_START_HOUR && hour < DAYLIGHT_END_HOUR;
+}
+
+// ===== DATE FORMATTING (YYYY-MM-DD, 24h) =====
+function pad2(n) { return n.toString().padStart(2, '0'); }
+function formatDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function formatDateTime(ts) {
+  const d = new Date(ts);
+  return `${formatDate(ts)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function metricStatus(val, min, max) {
+  if (val === '' || val == null || min === '' || min == null || max === '' || max == null) return 'none';
+  if (val < min || val > max) {
+    if (val < min * 0.7 || val > max * 1.3) return 'danger';
+    return 'warn';
+  }
+  return 'ok';
+}
+
+function renderLatestComparison() {
+  const el = document.getElementById('latest-compare');
+  const plantId = document.getElementById('dash-plant-select').value;
+  if (!plantId) { el.innerHTML = '<div class="small">Select a plant above.</div>'; return; }
+  const plant = PLANTS.find(p => p.PlantID === plantId);
+  const reading = latestReadingFor(plantId);
+  if (!plant) { el.innerHTML = '<div class="small">Plant not found.</div>'; return; }
+  if (!reading) { el.innerHTML = '<div class="small">No readings logged yet for this plant.</div>'; return; }
+  const daylight = isDuringDaylightWindow(reading.Timestamp);
+
+  const metrics = [
+    { label: 'Moisture %', val: reading.Moisture, min: plant.MoistureMin, max: plant.MoistureMax },
+    { label: 'Light lux', val: reading.Light, min: plant.LightMin, max: plant.LightMax, skip: !daylight,
+      skipNote: 'not evaluated — reading taken outside daylight hours' },
+    { label: 'Temp °C', val: reading.Temperature, min: plant.TempMin, max: plant.TempMax },
+    { label: 'Conductivity µS/cm', val: reading.Conductivity, min: plant.ConductivityMin, max: plant.ConductivityMax }
+  ];
+
+  el.innerHTML = `<div class="small" style="margin-bottom:8px;">As of ${formatDateTime(reading.Timestamp)}</div>
+    <div class="reading-grid">` +
+    metrics.map(m => {
+      const status = m.skip ? 'none' : metricStatus(m.val, m.min, m.max);
+      const rangeText = m.skip ? m.skipNote : (m.min === '' || m.min == null) ? 'no data' : `${m.min}–${m.max}`;
+      return `<div class="reading-box ${status === 'none' ? '' : status}">
+                <div class="val">${m.val === '' || m.val == null ? '–' : m.val}</div>
+                <div class="lbl">${m.label}</div>
+                <div class="range">${m.skip ? m.skipNote : 'rec: ' + rangeText}</div>
+              </div>`;
+    }).join('') +
+    `</div>`;
+}
+
+// ===== DASHBOARD: TREND CHART =====
+let READINGS = [];
+
+async function loadDashboard() {
+  const statusListEl = document.getElementById('dash-status-list');
+  statusListEl.textContent = 'Loading…';
+  try {
+    const [plantsData, readingsData] = await Promise.all([apiGet('getPlants'), apiGet('getReadings')]);
+    PLANTS = plantsData.plants || [];
+    READINGS = readingsData.readings || [];
+    renderPlantLists();
+    renderStatusList();
+    renderLatestComparison();
+    renderChart();
+  } catch (err) {
+    statusListEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+function latestReadingFor(plantId) {
+  const rows = READINGS.filter(r => r.PlantID === plantId);
+  if (!rows.length) return null;
+  return rows.reduce((a, b) => new Date(a.Timestamp) > new Date(b.Timestamp) ? a : b);
+}
+
+function evaluateStatus(plant, reading) {
+  if (!reading) return { label: 'No data', cls: 'none' };
+  const daylight = isDuringDaylightWindow(reading.Timestamp);
+  const checks = [
+    [reading.Moisture, plant.MoistureMin, plant.MoistureMax],
+    daylight ? [reading.Light, plant.LightMin, plant.LightMax] : [null, null, null],
+    [reading.Temperature, plant.TempMin, plant.TempMax],
+    [reading.Conductivity, plant.ConductivityMin, plant.ConductivityMax]
+  ];
+  let worst = 'ok';
+  checks.forEach(([val, min, max]) => {
+    if (val === '' || val == null || min === '' || max === '' || min == null || max == null) return;
+    if (val < min * 0.7 || val > max * 1.3) worst = 'danger';
+    else if ((val < min || val > max) && worst !== 'danger') worst = 'warn';
+  });
+  return { label: worst === 'ok' ? 'Healthy' : worst === 'warn' ? 'Check soon' : 'Needs attention', cls: worst };
+}
+
+function buildTips(plant, reading) {
+  const tips = [];
+  const daylight = isDuringDaylightWindow(reading.Timestamp);
+  const checkRange = (val, min, max, lowMsg, highMsg) => {
+    if (val === '' || val == null || min === '' || min == null || max === '' || max == null) return;
+    if (val < min) tips.push(lowMsg);
+    else if (val > max) tips.push(highMsg);
+  };
+  checkRange(reading.Moisture, plant.MoistureMin, plant.MoistureMax, 'Water soon', 'Let soil dry');
+  if (daylight) checkRange(reading.Light, plant.LightMin, plant.LightMax, 'Needs more light', 'Too much light');
+  checkRange(reading.Temperature, plant.TempMin, plant.TempMax, 'Too cold', 'Too warm');
+  checkRange(reading.Conductivity, plant.ConductivityMin, plant.ConductivityMax, 'Consider fertilizing', 'Ease off fertilizer');
+  return tips;
+}
+
+function selectPlantOnDashboard(plantId) {
+  document.getElementById('dash-plant-select').value = plantId;
+  onDashPlantChange();
+  document.getElementById('latest-compare').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function renderStatusList() {
+  const el = document.getElementById('dash-status-list');
+  if (!PLANTS.length) { el.textContent = 'No plants set up yet.'; return; }
+  el.innerHTML = '';
+  PLANTS.forEach(p => {
+    const reading = latestReadingFor(p.PlantID);
+    const status = evaluateStatus(p, reading);
+    const row = document.createElement('div');
+    row.className = 'plant-row plant-row-clickable';
+    row.onclick = () => selectPlantOnDashboard(p.PlantID);
+    const tip = reading ? buildTips(p, reading).join(', ') : '';
+    const lastUpdated = reading ? `<div class="small">Updated ${formatDateTime(reading.Timestamp)}</div>` : '';
+    row.innerHTML = `<span>${p.PlantName}${tip ? ' — <span class="small">' + tip + '</span>' : ''}${lastUpdated}</span>
+                      <span class="badge ${status.cls}">${status.label}</span>`;
+    el.appendChild(row);
+  });
+}
+
+let chartInstance = null;
+function renderChart() {
+  const plantId = document.getElementById('dash-plant-select').value;
+  const metric = document.getElementById('dash-metric-select').value;
+  if (!plantId) return;
+  const rows = READINGS.filter(r => r.PlantID === plantId)
+    .sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+  const labels = rows.map(r => formatDate(r.Timestamp));
+  const values = rows.map(r => r[metric]);
+
+  const ctx = document.getElementById('trend-chart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ label: metric, data: values, borderColor: '#3f6b4a', backgroundColor: '#e7efe9', tension: 0.3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+  });
+}
+
+// ===== INIT =====
+if (CONFIG.url) loadPlants();
+</script>
+</body>
+</html>
