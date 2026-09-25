@@ -5,9 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
   Plant Care App
-  Version: 1.2.0
+  Version: 1.4.0
   Last updated: 2026-09-25
   Change log (most recent first):
+    1.4.0 (2026-09-25) — "Latest reading vs recommended" now shows the plant's species
+                         and a link to OpenPlantbook's Browse DB, pre-filled with the
+                         species name via a best-effort ?name= query param (OpenPlantbook
+                         is a client-rendered site with no documented per-species page
+                         URL, so this isn't guaranteed to auto-search — worst case it
+                         opens the Browse DB page with the species name shown right next
+                         to the link so it can be pasted in manually).
+    1.3.0 (2026-09-25) — App and backend version are now shown automatically in the
+                         header on load (and after saving config), instead of requiring
+                         a tap on "Check backend version" in Setup. The Setup button is
+                         now just a manual "Refresh version info".
     1.2.0 (2026-09-25) — Saved readings now use the phone's local wall-clock time
                          (no "Z"/UTC suffix) instead of new Date().toISOString(),
                          which was always UTC — that was the source of the timestamp
@@ -107,7 +118,7 @@
 <header>
   <h1>🌿 Plant Care</h1>
   <p id="header-sub">Setup, log, and track your plants</p>
-  <p style="margin: 4px 0 0; font-size: 11px; color: var(--muted);" id="app-version">v1.0.0</p>
+  <p style="margin: 4px 0 0; font-size: 11px; color: var(--muted);" id="header-version">v1.0.0</p>
 </header>
 
 <main>
@@ -122,8 +133,7 @@
       <input id="cfg-secret" placeholder="change-me-to-something-random">
       <button class="secondary" onclick="saveConfig()">Save config</button>
       <div class="status-line" id="cfg-status"></div>
-      <div class="small" id="backend-version-status" style="margin-top:8px;"></div>
-      <button class="secondary" onclick="checkBackendVersion()" style="margin-top:4px;">Check backend version</button>
+      <button class="secondary" onclick="checkBackendVersion()" style="margin-top:8px;">Refresh version info</button>
     </div>
 
     <div class="card">
@@ -214,8 +224,8 @@
 // ===== APP VERSION =====
 // Bump this (and the comment block + change log at the top of the file) with every
 // meaningful update, so it's easy to tell which version is actually deployed.
-const APP_VERSION = '1.2.0';
-document.getElementById('app-version').textContent = 'v' + APP_VERSION;
+const APP_VERSION = '1.4.0';
+document.getElementById('header-version').textContent = 'App v' + APP_VERSION;
 
 // ===== CONFIG PERSISTENCE (local to this device only) =====
 let CONFIG = JSON.parse(localStorage.getItem('plantAppConfig') || '{}');
@@ -228,6 +238,7 @@ function saveConfig() {
   localStorage.setItem('plantAppConfig', JSON.stringify(CONFIG));
   document.getElementById('cfg-status').textContent = 'Saved.';
   loadPlants();
+  checkBackendVersion();
 }
 
 async function apiPost(body) {
@@ -248,14 +259,18 @@ async function apiGet(action) {
 }
 
 async function checkBackendVersion() {
-  const el = document.getElementById('backend-version-status');
-  el.textContent = 'Checking…';
+  const el = document.getElementById('header-version');
+  if (!CONFIG.url) {
+    el.textContent = `App v${APP_VERSION} · Backend: not configured yet`;
+    return;
+  }
+  el.textContent = `App v${APP_VERSION} · Backend: checking…`;
   try {
     const data = await apiGet(''); // no action → doGet's default branch, which reports the version
     const backendVersion = data.version || 'unknown (older deployment — redeploy to add version reporting)';
-    el.textContent = `App: v${APP_VERSION} · Backend: v${backendVersion}`;
+    el.textContent = `App v${APP_VERSION} · Backend v${backendVersion}`;
   } catch (err) {
-    el.textContent = 'Could not reach backend: ' + err.message;
+    el.textContent = `App v${APP_VERSION} · Backend: unreachable`;
   }
 }
 
@@ -638,7 +653,14 @@ function renderLatestComparison() {
     { label: 'Conductivity µS/cm', val: reading.Conductivity, min: plant.ConductivityMin, max: plant.ConductivityMax }
   ];
 
-  el.innerHTML = `<div class="small" style="margin-bottom:8px;">As of ${formatDateTime(reading.Timestamp)}</div>
+  const speciesLine = plant.Species
+    ? `<div class="small" style="margin-bottom:4px;">Species: ${plant.Species} —
+         <a href="https://open.plantbook.io/browse-db/?name=${encodeURIComponent(plant.Species)}" target="_blank" rel="noopener">
+           View on OpenPlantbook ↗</a></div>`
+    : '';
+
+  el.innerHTML = speciesLine +
+    `<div class="small" style="margin-bottom:8px;">As of ${formatDateTime(reading.Timestamp)}</div>
     <div class="reading-grid">` +
     metrics.map(m => {
       const status = m.skip ? 'none' : metricStatus(m.val, m.min, m.max);
@@ -755,6 +777,7 @@ function renderChart() {
 
 // ===== INIT =====
 if (CONFIG.url) loadPlants();
+checkBackendVersion();
 </script>
 </body>
 </html>
