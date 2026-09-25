@@ -5,9 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
   Plant Care App
-  Version: 1.4.0
+  Version: 1.5.0
   Last updated: 2026-09-25
   Change log (most recent first):
+    1.5.0 (2026-09-25) — "View on OpenPlantbook" now links straight to the species'
+                         own page (https://open.plantbook.io/ui/plant-details/<pid>),
+                         confirmed working. No new data needed — the Species column
+                         already stores the raw OpenPlantbook pid (captured when the
+                         species is picked in Setup), so this is a pure link-format
+                         fix, not a data-model change. Dropped the clipboard-copy
+                         workaround from 1.4.1, no longer needed.
+    1.4.1 (2026-09-25) — Clicking "View on OpenPlantbook" now also copies the species
+                         name to the clipboard, since OpenPlantbook has no documented
+                         deep-link URL for a single species — this makes pasting it
+                         into their Browse DB search box a one-tap action.
     1.4.0 (2026-09-25) — "Latest reading vs recommended" now shows the plant's species
                          and a link to OpenPlantbook's Browse DB, pre-filled with the
                          species name via a best-effort ?name= query param (OpenPlantbook
@@ -224,7 +235,7 @@
 // ===== APP VERSION =====
 // Bump this (and the comment block + change log at the top of the file) with every
 // meaningful update, so it's easy to tell which version is actually deployed.
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 document.getElementById('header-version').textContent = 'App v' + APP_VERSION;
 
 // ===== CONFIG PERSISTENCE (local to this device only) =====
@@ -655,7 +666,8 @@ function renderLatestComparison() {
 
   const speciesLine = plant.Species
     ? `<div class="small" style="margin-bottom:4px;">Species: ${plant.Species} —
-         <a href="https://open.plantbook.io/browse-db/?name=${encodeURIComponent(plant.Species)}" target="_blank" rel="noopener">
+         <a href="https://open.plantbook.io/ui/plant-details/${encodeURIComponent(plant.Species)}"
+            target="_blank" rel="noopener">
            View on OpenPlantbook ↗</a></div>`
     : '';
 
