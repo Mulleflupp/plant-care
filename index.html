@@ -3,6 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  Plant Care App
+  Version: 1.0.1
+  Last updated: 2026-09-25
+  Change log (most recent first):
+    1.0.1 (2026-09-25) — Fixed silent NFC beep: AudioContext is now created/resumed
+                         during the actual button tap (a real user gesture) and
+                         reused on each tag read, instead of being created inside
+                         the hardware-triggered NFC event, which browsers block.
+    1.0.0 (2026-09-25) — Baseline version marker added; NFC listen toggle + haptic/audio feedback on tag read.
+-->
 <title>Plant Care</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
@@ -88,6 +99,7 @@
 <header>
   <h1>🌿 Plant Care</h1>
   <p id="header-sub">Setup, log, and track your plants</p>
+  <p style="margin: 4px 0 0; font-size: 11px; color: var(--muted);" id="app-version">v1.0.0</p>
 </header>
 
 <main>
@@ -189,6 +201,12 @@
 </nav>
 
 <script>
+// ===== APP VERSION =====
+// Bump this (and the comment block + change log at the top of the file) with every
+// meaningful update, so it's easy to tell which version is actually deployed.
+const APP_VERSION = '1.0.1';
+document.getElementById('app-version').textContent = 'v' + APP_VERSION;
+
 // ===== CONFIG PERSISTENCE (local to this device only) =====
 let CONFIG = JSON.parse(localStorage.getItem('plantAppConfig') || '{}');
 document.getElementById('cfg-url').value = CONFIG.url || '';
@@ -386,12 +404,27 @@ function selectPlantManually() {
 let nfcArmed = false;
 let nfcAbortController = null;
 
+// The AudioContext must be created (or resumed) during a real user gesture
+// (an actual tap on the button) or the browser leaves it silently suspended.
+// So we create/resume it here, inside the click handler, and just reuse it
+// later from the NFC "tag read" event, which is a hardware event, not a tap.
+let sharedAudioCtx = null;
+function primeAudioContext() {
+  try {
+    if (!sharedAudioCtx) {
+      sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+  } catch (e) { /* Web Audio not available, ignore */ }
+}
+
 function nfcFeedback() {
   // Haptic
   if (navigator.vibrate) navigator.vibrate(120);
-  // Audible: short beep via Web Audio, no external file needed
+  // Audible: short beep via Web Audio, reusing the context primed on tap
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!sharedAudioCtx) return;
+    const ctx = sharedAudioCtx;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -414,6 +447,9 @@ function setNfcButtonState(listening) {
 async function scanNfc() {
   const statusEl = document.getElementById('identify-status');
   if (!('NDEFReader' in window)) { statusEl.textContent = 'Web NFC not supported — use the dropdown instead.'; return; }
+
+  // This call happens inside a real tap, so it's the right place to unlock audio.
+  primeAudioContext();
 
   if (nfcArmed) {
     if (nfcAbortController) nfcAbortController.abort();
