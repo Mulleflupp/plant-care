@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
   Plant Care App
-  Version: 1.1.0
+  Version: 1.2.0
   Last updated: 2026-09-25
   Change log (most recent first):
+    1.2.0 (2026-09-25) — Saved readings now use the phone's local wall-clock time
+                         (no "Z"/UTC suffix) instead of new Date().toISOString(),
+                         which was always UTC — that was the source of the timestamp
+                         showing 2 hours behind when viewed directly in the Sheet.
     1.1.0 (2026-09-25) — Added "Check backend version" button in Setup, showing the app's
                          own version alongside the deployed Apps Script version reported
                          by the backend (requires the backend to be redeployed with its
@@ -210,7 +214,7 @@
 // ===== APP VERSION =====
 // Bump this (and the comment block + change log at the top of the file) with every
 // meaningful update, so it's easy to tell which version is actually deployed.
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 document.getElementById('app-version').textContent = 'v' + APP_VERSION;
 
 // ===== CONFIG PERSISTENCE (local to this device only) =====
@@ -555,7 +559,7 @@ async function saveReading() {
       action: 'logReading',
       plantId: currentPlant.PlantID,
       plantName: currentPlant.PlantName,
-      timestamp: new Date().toISOString(),
+      timestamp: nowLocalTimestamp(),
       moisture: lastReading.moisture,
       light: lastReading.light,
       temperature: lastReading.temperature,
@@ -594,6 +598,17 @@ function formatDate(ts) {
 function formatDateTime(ts) {
   const d = new Date(ts);
   return `${formatDate(ts)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+// A local-time ISO-like string with NO "Z"/offset suffix (e.g. "2026-09-25T23:09:12").
+// A string in this exact shape is defined by the JS spec to be parsed back as local
+// time, not UTC — so what we store here is unambiguous, and what shows up if you open
+// the Sheet directly already matches your phone's wall-clock time, no timezone math
+// needed anywhere downstream (display, sorting, or in the raw Sheet cell itself).
+function nowLocalTimestamp() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` +
+    `T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 function metricStatus(val, min, max) {
