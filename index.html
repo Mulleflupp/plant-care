@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
   Plant Care App
-  Version: 1.0.1
+  Version: 1.1.0
   Last updated: 2026-09-25
   Change log (most recent first):
+    1.1.0 (2026-09-25) — Added "Check backend version" button in Setup, showing the app's
+                         own version alongside the deployed Apps Script version reported
+                         by the backend (requires the backend to be redeployed with its
+                         own version reporting — see apps-script-code.gs).
     1.0.1 (2026-09-25) — Fixed silent NFC beep: AudioContext is now created/resumed
                          during the actual button tap (a real user gesture) and
                          reused on each tag read, instead of being created inside
@@ -114,6 +118,8 @@
       <input id="cfg-secret" placeholder="change-me-to-something-random">
       <button class="secondary" onclick="saveConfig()">Save config</button>
       <div class="status-line" id="cfg-status"></div>
+      <div class="small" id="backend-version-status" style="margin-top:8px;"></div>
+      <button class="secondary" onclick="checkBackendVersion()" style="margin-top:4px;">Check backend version</button>
     </div>
 
     <div class="card">
@@ -204,7 +210,7 @@
 // ===== APP VERSION =====
 // Bump this (and the comment block + change log at the top of the file) with every
 // meaningful update, so it's easy to tell which version is actually deployed.
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 document.getElementById('app-version').textContent = 'v' + APP_VERSION;
 
 // ===== CONFIG PERSISTENCE (local to this device only) =====
@@ -235,6 +241,18 @@ async function apiGet(action) {
   if (!CONFIG.url) throw new Error('Set the Apps Script URL in Setup first.');
   const resp = await fetch(CONFIG.url + '?action=' + action);
   return resp.json();
+}
+
+async function checkBackendVersion() {
+  const el = document.getElementById('backend-version-status');
+  el.textContent = 'Checking…';
+  try {
+    const data = await apiGet(''); // no action → doGet's default branch, which reports the version
+    const backendVersion = data.version || 'unknown (older deployment — redeploy to add version reporting)';
+    el.textContent = `App: v${APP_VERSION} · Backend: v${backendVersion}`;
+  } catch (err) {
+    el.textContent = 'Could not reach backend: ' + err.message;
+  }
 }
 
 // ===== VIEW SWITCHING =====
