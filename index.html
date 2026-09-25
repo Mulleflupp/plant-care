@@ -135,7 +135,7 @@
   <div class="view active" id="view-log">
     <div class="card">
       <h2>1. Identify the plant</h2>
-      <button class="primary" onclick="scanNfc()" id="nfc-scan-btn">📲 Tap NFC tag</button>
+      <button class="primary" onclick="scanNfc()" id="nfc-scan-btn">📲 Tap to listen for NFC tags</button>
       <label>...or select manually</label>
       <select id="manual-plant-select" onchange="selectPlantManually()"></select>
       <div class="status-line" id="identify-status"></div>
@@ -384,23 +384,54 @@ function selectPlantManually() {
 }
 
 let nfcArmed = false;
+let nfcAbortController = null;
+
+function nfcFeedback() {
+  // Haptic
+  if (navigator.vibrate) navigator.vibrate(120);
+  // Audible: short beep via Web Audio, no external file needed
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch (e) { /* audio not available, ignore */ }
+}
+
+function setNfcButtonState(listening) {
+  const btn = document.getElementById('nfc-scan-btn');
+  btn.textContent = listening ? '👂 Listening for tags (tap to stop)' : '📲 Tap to listen for NFC tags';
+  btn.classList.toggle('secondary', listening);
+  btn.classList.toggle('primary', !listening);
+}
 
 async function scanNfc() {
   const statusEl = document.getElementById('identify-status');
   if (!('NDEFReader' in window)) { statusEl.textContent = 'Web NFC not supported — use the dropdown instead.'; return; }
 
   if (nfcArmed) {
-    statusEl.textContent = 'Already listening — just tap any tag, no need to press this again.';
+    if (nfcAbortController) nfcAbortController.abort();
+    nfcArmed = false;
+    setNfcButtonState(false);
+    statusEl.textContent = 'Stopped listening for NFC tags.';
     return;
   }
 
   try {
+    nfcAbortController = new AbortController();
     const reader = new NDEFReader();
-    await reader.scan();
+    await reader.scan({ signal: nfcAbortController.signal });
     nfcArmed = true;
-    document.getElementById('nfc-scan-btn').textContent = '📲 Listening for taps…';
-    statusEl.textContent = 'Armed — tap any plant tag now or anytime this tab stays open.';
+    setNfcButtonState(true);
+    statusEl.textContent = 'Listening — tap any plant tag now or anytime this tab stays open.';
     reader.onreading = event => {
+      nfcFeedback();
       const record = event.message.records[0];
       const textDecoder = new TextDecoder(record.encoding || 'utf-8');
       const plantId = textDecoder.decode(record.data);
