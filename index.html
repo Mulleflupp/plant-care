@@ -5,9 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
   Plant Care App
-  Version: 1.6.0
-  Last updated: 2026-09-25
+  Version: 1.7.0
+  Last updated: 2026-09-26
   Change log (most recent first):
+    1.7.0 (2026-09-26) — Two fixes:
+                         1) Selecting a plant in the Log tab (manually or via NFC tap)
+                         now clears any leftover "Saved to sheet." / Bluetooth status
+                         text from the previous plant, instead of leaving it on screen
+                         looking like it applies to the newly selected plant.
+                         2) Dashboard load now fetches Plants + Readings in a single
+                         request (new backend action getDashboardData) instead of two
+                         separate ones, cutting the ~5-10s load roughly in half, since
+                         each Apps Script request pays its own overhead regardless of
+                         how little data it returns. Falls back automatically to the
+                         old two-request approach if the backend hasn't been
+                         redeployed yet. Requires backend v1.2.0 for the speed-up to
+                         take effect.
     1.6.0 (2026-09-25) — Added a real app icon (a simple leaf mark) instead of the
                          default grey "G": a favicon for the browser tab, an
                          apple-touch-icon, and a manifest.json + icons/ folder so
@@ -247,7 +260,7 @@
 // ===== APP VERSION =====
 // Bump this (and the comment block + change log at the top of the file) with every
 // meaningful update, so it's easy to tell which version is actually deployed.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 document.getElementById('header-version').textContent = 'App v' + APP_VERSION;
 
 // ===== CONFIG PERSISTENCE (local to this device only) =====
@@ -454,6 +467,10 @@ function setCurrentPlant(plantId) {
   document.getElementById('reading-grid').style.display = 'none';
   document.getElementById('save-reading-btn').style.display = 'none';
   document.getElementById('identify-status').textContent = 'Selected: ' + p.PlantName;
+  // Clear any leftover status from the previous plant (e.g. "Saved to sheet."),
+  // which would otherwise stay on screen and look like it applies to this plant.
+  document.getElementById('ble-status').textContent = '';
+  document.getElementById('save-status').textContent = '';
 }
 
 function selectPlantManually() {
@@ -705,9 +722,20 @@ async function loadDashboard() {
   const statusListEl = document.getElementById('dash-status-list');
   statusListEl.textContent = 'Loading…';
   try {
-    const [plantsData, readingsData] = await Promise.all([apiGet('getPlants'), apiGet('getReadings')]);
-    PLANTS = plantsData.plants || [];
-    READINGS = readingsData.readings || [];
+    // One combined request instead of two separate ones (getPlants + getReadings):
+    // each Apps Script request pays its own overhead, so two requests run roughly
+    // twice as slow as one, even in parallel. Falls back to the old two-request
+    // approach if the deployed backend predates getDashboardData (no "plants" key
+    // back means the default doGet branch answered instead).
+    const combined = await apiGet('getDashboardData');
+    if (combined.plants) {
+      PLANTS = combined.plants || [];
+      READINGS = combined.readings || [];
+    } else {
+      const [plantsData, readingsData] = await Promise.all([apiGet('getPlants'), apiGet('getReadings')]);
+      PLANTS = plantsData.plants || [];
+      READINGS = readingsData.readings || [];
+    }
     renderPlantLists();
     renderStatusList();
     renderLatestComparison();
