@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
   Plant Care App
-  Version: 1.5.0
+  Version: 1.6.0
   Last updated: 2026-09-25
   Change log (most recent first):
+    1.6.0 (2026-09-25) — Added a real app icon (a simple leaf mark) instead of the
+                         default grey "G": a favicon for the browser tab, an
+                         apple-touch-icon, and a manifest.json + icons/ folder so
+                         Android's "Add to Home Screen" picks it up too, along with
+                         a standalone (chrome-less) display mode and theme color.
+                         Needs the new icons/ folder and manifest.json uploaded to
+                         GitHub Pages alongside index.html (see delivery notes).
     1.5.0 (2026-09-25) — "View on OpenPlantbook" now links straight to the species'
                          own page (https://open.plantbook.io/ui/plant-details/<pid>),
                          confirmed working. No new data needed — the Species column
@@ -45,6 +52,11 @@
     1.0.0 (2026-09-25) — Baseline version marker added; NFC listen toggle + haptic/audio feedback on tag read.
 -->
 <title>Plant Care</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#3f6b4a">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root {
@@ -235,7 +247,7 @@
 // ===== APP VERSION =====
 // Bump this (and the comment block + change log at the top of the file) with every
 // meaningful update, so it's easy to tell which version is actually deployed.
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 document.getElementById('header-version').textContent = 'App v' + APP_VERSION;
 
 // ===== CONFIG PERSISTENCE (local to this device only) =====
